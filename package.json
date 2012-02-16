@@ -1,0 +1,23 @@
+{
+    "name": "reposter",
+    "version": "0.1.0",
+    "description": "reposter micro blog to weibo.com",
+    "author": "iamlaobie <iamlaobie@gmail.com>",
+    "dependencies": {
+        "devent": "https://github.com/netgen-inc/devent/tarball/master",
+        "queuer": "https://github.com/netgen-inc/queuer/tarball/master",
+        "mysql": ">= 0.9.5",
+        "request":">=2.9.3",
+        "oauth":"0.9.5",
+        "weibo":"https://github.com/iamlaobie/node-weibo/tarball/master",
+        "nodemailer":">=0.2.4",
+        "async":">=0.1.15",
+        "underscore":">=1.2.3"
+    },
+    "scripts": {
+        "start": "node reposter.js"
+    },
+    "engines": {
+        "node": "0.6.x"
+    }
+}
