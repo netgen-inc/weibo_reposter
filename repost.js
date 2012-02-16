@@ -6,7 +6,7 @@ var url = require('url');
 var logger = require('./lib/logger').logger(settings.logFile);
 var util = require('util');
 var event = require('events').EventEmitter;
-var tool = require('./lib/tool');
+var tool = require('./lib/tool').tool;
 var async = require('async');
 
 
@@ -46,19 +46,16 @@ var taskBack = function(task,  status){
     }
 }
 
-reposter.on('repost', function(error, body, id, status, context){
-    taskBack(context.task, complete(error, body, id, status, context));
-    dequeue();
-});
-
 
 var repost = function(task, callback){
-    db.getRepostTask(task.uri, function(err, weiboId, repostRecord){
+    db.getRepostTask(task.uri, function(err, weiboId, record){
+        console.log([err, weiboId, record]);
+        var context = {task:task,record:record};
         if(err){
             console.log(['fetch repost relation error', err]);
             //要转发的微博没有发送，并且超过1小时，放弃这个任务
-            if(err.number == 7000 && tool.currentTimestap() - err.row.in_time > 3600){
-                console.log("task " + task.uri + " timeout");
+            if(err.number == 7000 && tool.timestamp() - err.row.in_time > 3600){
+                complete(err, null, weiboId, '', context);
                 taskBack(task, true);
             }else{
                 taskBack(task, false);
@@ -66,10 +63,10 @@ var repost = function(task, callback){
             return; 
         }
         
-        var stockCode = repostRecord.stockCode;
+        var stockCode = record.stockCode;
         //debug模式下，总是使用stock0@netgen.com.cn发送微博
         if(settings.mode == 'debug'){
-            stockCode = 'sz900000';  
+            stockCode = 'sz900000';
         }
         stockCode = stockCode.toLowerCase();
         
@@ -81,8 +78,15 @@ var repost = function(task, callback){
             taskBack(task, true);
             return;
         }
-        reposter.repost(weiboId, '', weiboAccounts[stockCode], {task:task,record:repostRecord});
-        callback();
+
+        var cb = function(error, body, id, status, context){
+            taskBack(context.task, complete(error, body, id, status, context));
+            callback();    
+            dequeue();
+        }
+        
+        reposter.repost(weiboId, '', weiboAccounts[stockCode], context, cb);
+        
     });
 };
 
@@ -125,13 +129,13 @@ var complete = function(error, body, weiboId, status, context){
     var task = context.task;
     if(!error){
         logger.info("success\t" + record.id + "\t" + weiboId + "\t" + record.article_id + "\t" + body.id + "\t" + body.t_url);
-        db.reposted(record.id, body.id, body.t_url, function(err, info){
+        db.reposted(record.id, body.id, body.t_url, weiboId, function(err, info){
             console.log([err, info]);    
         });
         return true;
     }
     
-    var errMsg = error.error;
+    var errMsg = error.error || error.message;
     logger.info("error\t" + record.id +"\t"+ weiboId + "\t" + record.stock_code + "\t" + errMsg);  
     
     //发送受限制
@@ -164,6 +168,10 @@ process.on('SIGUSR2', function () {
     }
 });
 
+process.on('uncaughtException', function(e){
+    console.log(e);
+});
+
 /**
  * 测试代码
 setTimeout(function(){
@@ -177,13 +185,16 @@ setTimeout(function(){
     send(task, sender, {task:task});
 }, 1000);
 
-*/
+
 
 setTimeout(function(){
-    var task = {uri:'mysql://abc.com/stock_radar#1', retry:0};
+    var task = {uri:'mysql://abc.com/dddd#1', retry:0};
     aq.push(task);
     console.log(aq.length());
 }, 1000);
+
+
+*/
 
 
 
