@@ -1,8 +1,8 @@
 var fs = require('fs');
 var settings = require(__dirname + '/etc/settings.json');
 var url = require('url');
-//var de = require('devent').createDEvent('sender');
-//var queue = require('queuer');
+var de = require('devent').createDEvent('sender');
+var queue = require('queuer');
 var logger = require('./lib/logger').logger(settings.logFile);
 var util = require('util');
 var event = require('events').EventEmitter;
@@ -11,8 +11,8 @@ var async = require('async');
 
 
 //发送队列的API
-//var rq = queue.getQueue('http://'+settings.queue.host+':'+settings.queue.port+'/queue', settings.queue.send);
-
+var rq = queue.getQueue('http://'+settings.queue.host+':'+settings.queue.port+'/queue', settings.queue.repost);
+console.log(settings.queue.repost);
 var Reposter = require('./lib/reposter').Reposter;
 var reposter = new Reposter();
 reposter.init(settings);
@@ -38,7 +38,6 @@ db.loadAccounts(function(err, accounts){
 });
 
 var taskBack = function(task,  status){
-    return;
     if(status){
         de.emit('task-finished', task);  
     }else{
@@ -52,14 +51,25 @@ var repost = function(task, callback){
         console.log([err, weiboId, record]);
         var context = {task:task,record:record};
         if(err){
+            console.log(err);
             console.log(['fetch repost relation error', err]);
-            //要转发的微博没有发送，并且超过1小时，放弃这个任务
-            if(err.number == 7000 && tool.timestamp() - err.row.in_time > 3600){
+            //要转发的微博不存在或者没有发送，并且超过1小时，放弃这个任务
+            if(err.number == 7000 || err.number == 7002){
+                if(tool.timestamp() - err.row.in_time > 3600){
+                    complete(err, null, weiboId, '', context);
+                    taskBack(task, true);
+                }else{
+                    taskBack(task, false);
+                }
+            //不存在文章id和股票代码的关联关系
+            }else if(err.number == 7001){
                 complete(err, null, weiboId, '', context);
+                console.log(err);
                 taskBack(task, true);
             }else{
-                taskBack(task, false);
+                taskBack(task, complete(err, null, weiboId, '', context));
             }
+            callback();
             return; 
         }
         
@@ -91,29 +101,28 @@ var repost = function(task, callback){
 };
 
 var dequeue = function(){
-    return;
+    console.log('local queue length is ' + aq.length());
     if(aq.length() >= settings.reposterCount){
         return;
     }
     
     rq.dequeue(function(err, task){
         if(err == 'empty' || task == undefined){
-            console.log('send queue is empty');
+            console.log('repost queue is empty');
             return;
         }
-        console.log(['dequeue', task]);
+        //console.log(['dequeue', task]);
         aq.push(task);
     });
 }
 
 var start = function(){
-    return;
     setInterval(function(){
         dequeue();    
     }, settings.queue.interval);  
     
     de.on('queued', function( queue ){
-        if(queue == settings.queue.send){
+        if(queue == settings.queue.repost){
             console.log( queue + "有内容");
             dequeue();
         }
@@ -125,11 +134,11 @@ var start = function(){
  发送结束后的处理，返回true表示发送完成
 */
 var complete = function(error, body, weiboId, status, context){
-    var record = context.record;
+    var record = context.record || {};
     var task = context.task;
     if(!error){
         logger.info("success\t" + record.id + "\t" + weiboId + "\t" + record.article_id + "\t" + body.id + "\t" + body.t_url);
-        db.reposted(record.id, body.id, body.t_url, weiboId, function(err, info){
+        db.reposted(record, body.id, body.t_url, weiboId, function(err, info){
             console.log([err, info]);    
         });
         return true;
@@ -154,7 +163,6 @@ var complete = function(error, body, weiboId, status, context){
     }
 }
 
-
 var aq = async.queue(repost, settings.reposterCount);
 
 fs.writeFileSync(__dirname + '/server.pid', process.pid.toString(), 'ascii');
@@ -167,10 +175,12 @@ process.on('SIGUSR2', function () {
         senders[i].init(settings);
     }
 });
-
+/*
 process.on('uncaughtException', function(e){
-    console.log(e);
+    console.log(['unkonwn exception:', e]);
 });
+*/
+console.log('reposter start at ' + tool.getDateString() + ', pid is ' + process.pid);
 
 /**
  * 测试代码
@@ -185,16 +195,14 @@ setTimeout(function(){
     send(task, sender, {task:task});
 }, 1000);
 
-
-
 setTimeout(function(){
     var task = {uri:'mysql://abc.com/dddd#1', retry:0};
     aq.push(task);
     console.log(aq.length());
 }, 1000);
-
-
 */
+
+
 
 
 
