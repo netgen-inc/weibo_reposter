@@ -3,8 +3,8 @@
     "mode":"debug",
     "reposterCount":20,
     "weibo":{
-        "appkey":"4054929016",
-        "secret":"d71d334237989dc8e544532108a09aae",
+        "appkey":"888888",
+        "secret":"888888888888888888888888888888",
         "timeout":30000
     },
     "mysql":{
