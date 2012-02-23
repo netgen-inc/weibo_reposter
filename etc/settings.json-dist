@@ -2,6 +2,7 @@
     "logFile":"repost.log",
     "mode":"debug",
     "reposterCount":20,
+    "limit":{"interval":300, "max":3},
     "weibo":{
         "appkey":"888888",
         "secret":"888888888888888888888888888888",

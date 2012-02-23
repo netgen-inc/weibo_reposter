@@ -12,7 +12,6 @@ var async = require('async');
 
 //发送队列的API
 var rq = queue.getQueue('http://'+settings.queue.host+':'+settings.queue.port+'/queue', settings.queue.repost);
-console.log(settings.queue.repost);
 var Reposter = require('./lib/reposter').Reposter;
 var reposter = new Reposter();
 reposter.init(settings);
@@ -48,7 +47,6 @@ var taskBack = function(task,  status){
 
 var repost = function(task, callback){
     db.getRepostTask(task.uri, function(err, weiboId, record){
-        console.log([err, weiboId, record]);
         var context = {task:task,record:record};
         if(err){
             console.log(err);
@@ -88,17 +86,45 @@ var repost = function(task, callback){
             taskBack(task, true);
             return;
         }
+        
+        //限速，不再做任何处理，等到任务超时重新入队
+        if(!sendAble(stockCode)){
+            callback();
+            return;
+        }
 
         var cb = function(error, body, id, status, context){
             taskBack(context.task, complete(error, body, id, status, context));
             callback();    
             dequeue();
         }
-        
+        context.user = weiboAccounts[stockCode];
         reposter.repost(weiboId, '', weiboAccounts[stockCode], context, cb);
-        
     });
 };
+
+
+//限速
+var sendAbleList = {};
+var sendAble = function(stockCode){
+    if(typeof sendAbleList[stockCode] != 'object'){
+        sendAbleList[stockCode] = {startTime:tool.timestamp(), cnt:0};
+    }
+    
+    var cur = sendAbleList[stockCode];
+    if(tool.timestamp() - cur.startTime <= settings.limit.interval){
+        if(cur.cnt < settings.limit.max){
+            cur.cnt += 1;
+            return true;     
+        }else{
+            return false;   
+        }
+    }else{
+        cur.cnt = 1;
+        cur.startTime = tool.timestamp();
+        return true;
+    }
+}
 
 var dequeue = function(){
     console.log('local queue length is ' + aq.length());
@@ -138,7 +164,7 @@ var complete = function(error, body, weiboId, status, context){
     var task = context.task;
     if(!error){
         logger.info("success\t" + record.id + "\t" + weiboId + "\t" + record.article_id + "\t" + body.id + "\t" + body.t_url);
-        db.reposted(record, body.id, body.t_url, weiboId, function(err, info){
+        db.reposted(record, body.id, body.t_url, weiboId, context.user.id, function(err, info){
             console.log([err, info]);    
         });
         return true;
@@ -175,25 +201,15 @@ process.on('SIGUSR2', function () {
         senders[i].init(settings);
     }
 });
-/*
+
 process.on('uncaughtException', function(e){
     console.log(['unkonwn exception:', e]);
 });
-*/
+
 console.log('reposter start at ' + tool.getDateString() + ', pid is ' + process.pid);
 
 /**
  * 测试代码
-setTimeout(function(){
-    var sender = new Sender();
-    sender.init(settings);
-    var task = {uri:'mysql://abc.com/stock_radar#1'};
-    sender.on('send', function(error, body, blog, context){
-        console.log(error);
-        taskBack(context.task, complete(error, body, blog));
-    });
-    send(task, sender, {task:task});
-}, 1000);
 
 setTimeout(function(){
     var task = {uri:'mysql://abc.com/dddd#1', retry:0};
@@ -201,7 +217,6 @@ setTimeout(function(){
     console.log(aq.length());
 }, 1000);
 */
-
 
 
 
