@@ -88,6 +88,7 @@ var repost = function(task, callback){
             !weiboAccounts[stockCode].access_token_secret){
             logger.info("error\t" + blog.id + "\t" + stockCode + "\tNOT Found the account\t"); 
             taskBack(task, true);
+            callback();
             return;
         }
         
