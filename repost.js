@@ -52,7 +52,7 @@ var repost = function(task, callback){
             console.log(err);
             console.log(['fetch repost relation error', err]);
             //要转发的微博不存在或者没有发送，并且超过1小时，放弃这个任务
-            if(err.number == 7000 || err.number == 7002){
+            if(err.number == 7000){
                 if(tool.timestamp() - err.row.in_time > 3600){
                     complete(err, null, weiboId, '', context);
                     taskBack(task, true);
@@ -64,6 +64,10 @@ var repost = function(task, callback){
                 complete(err, null, weiboId, '', context);
                 console.log(err);
                 taskBack(task, true);
+            //要转发的微博不存才
+            }else if (err.number == 7002){
+                complete(err, null, '', '', context)
+                taskBack(task, true); 
             }else{
                 taskBack(task, complete(err, null, weiboId, '', context));
             }
