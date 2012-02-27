@@ -51,9 +51,9 @@ var repost = function(task, callback){
         if(err){
             console.log(err);
             console.log(['fetch repost relation error', err]);
-            //要转发的微博不存在或者没有发送，并且超过1小时，放弃这个任务
+            //要转发的微博不存在或者没有发送，并且超过3小时，放弃这个任务
             if(err.number == 7000){
-                if(tool.timestamp() - err.row.in_time > 3600){
+                if(tool.timestamp() - err.row.in_time > 10800){
                     complete(err, null, weiboId, '', context);
                     taskBack(task, true);
                 }else{
@@ -182,7 +182,7 @@ var complete = function(error, body, weiboId, status, context){
     if(errMsg.match(/^40(308|090)/)){
         return false;
     //40013太长, 40025重复
-    }else if(errMsg.match(/^400(13|25)/)){                                                                                                                          
+    }else if(errMsg.match(/^400(13|25)/)){ 
         return true;
     }else{
         if(task.retry >= settings.queue.retry){
