@@ -55,8 +55,6 @@ var repost = function(task, callback){
                 if(tool.timestamp() - err.row.in_time > 10800){
                     complete(err, null, weiboId, '', context);
                     taskBack(task, true);
-                }else{
-                    taskBack(task, false);
                 }
             //不存在文章id和股票代码的关联关系
             }else if(err.number == 7001){
@@ -77,7 +75,7 @@ var repost = function(task, callback){
             return; 
         }
         
-        var stockCode = record.stockCode;
+        var stockCode = record.stock_code;
         //debug模式下，总是使用stock0@netgen.com.cn发送微博
         if(settings.mode == 'debug'){
             stockCode = 'sz900000';
@@ -88,7 +86,7 @@ var repost = function(task, callback){
         if(!weiboAccounts[stockCode] || 
             !weiboAccounts[stockCode].access_token || 
             !weiboAccounts[stockCode].access_token_secret){
-            logger.info("error\t" + blog.id + "\t" + stockCode + "\tNOT Found the account\t"); 
+            logger.info("error\t" + record.id + "\t" + stockCode + "\tNOT Found the account\t"); 
             taskBack(task, true);
             callback();
             return;
@@ -208,10 +206,11 @@ process.on('SIGUSR2', function () {
         senders[i].init(settings);
     }
 });
-
+/*
 process.on('uncaughtException', function(e){
     console.log(['unkonwn exception:', e]);
 });
+*/
 
 console.log('reposter start at ' + tool.getDateString() + ', pid is ' + process.pid);
 
