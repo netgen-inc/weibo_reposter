@@ -60,14 +60,16 @@ var repost = function(task, callback){
                     taskBack(task, false);
                 }
             //不存在文章id和股票代码的关联关系
-            }else if(err.number == 7001){
+            }else if(err.number == 7001 && ){
                 complete(err, null, weiboId, '', context);
                 console.log(err);
                 taskBack(task, true);
-            //要转发的微博不存才
+            //要转发的微博不存才，可能是convetor没有解析完成，等待5分钟
             }else if (err.number == 7002){
-                complete(err, null, '', '', context)
-                taskBack(task, true); 
+                if(tool.timestamp() - record.in_time > 300){
+                    complete(err, null, '', '', context)
+                    taskBack(task, true); 
+                }
             }else{
                 taskBack(task, complete(err, null, weiboId, '', context));
             }
