@@ -49,7 +49,6 @@ var repost = function(task, callback){
     db.getRepostTask(task.uri, function(err, weiboId, record){
         var context = {task:task,record:record};
         if(err){
-            console.log(err);
             console.log(['fetch repost relation error', err]);
             //要转发的微博不存在或者没有发送，并且超过3小时，放弃这个任务
             if(err.number == 7000){
@@ -60,11 +59,11 @@ var repost = function(task, callback){
                     taskBack(task, false);
                 }
             //不存在文章id和股票代码的关联关系
-            }else if(err.number == 7001 && ){
+            }else if(err.number == 7001){
                 complete(err, null, weiboId, '', context);
                 console.log(err);
                 taskBack(task, true);
-            //要转发的微博不存才，可能是convetor没有解析完成，等待5分钟
+            //要转发的微博不存才
             }else if (err.number == 7002){
                 if(tool.timestamp() - record.in_time > 300){
                     complete(err, null, '', '', context)
@@ -74,6 +73,7 @@ var repost = function(task, callback){
                 taskBack(task, complete(err, null, weiboId, '', context));
             }
             callback();
+            dequeue();
             return; 
         }
         
