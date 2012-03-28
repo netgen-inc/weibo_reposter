@@ -53,19 +53,8 @@ var repost = function(task, callback){
             //要转发的微博不存在或者没有发送，并且超过3小时，放弃这个任务
             if(err.number == 7000){
                 if(tool.timestamp() - err.row.in_time > 10800){
-                    complete(err, null, weiboId, '', context);
+                    complete(err, null, '', '', context);
                     taskBack(task, true);
-                }
-            //不存在文章id和股票代码的关联关系
-            }else if(err.number == 7001){
-                complete(err, null, weiboId, '', context);
-                console.log(err);
-                taskBack(task, true);
-            //要转发的微博不存才
-            }else if (err.number == 7002){
-                if(tool.timestamp() - record.in_time > 300){
-                    complete(err, null, '', '', context)
-                    taskBack(task, true); 
                 }
             }else{
                 taskBack(task, complete(err, null, weiboId, '', context));
@@ -89,12 +78,14 @@ var repost = function(task, callback){
             logger.info("error\t" + record.id + "\t" + stockCode + "\tNOT Found the account\t"); 
             taskBack(task, true);
             callback();
+            dequeue();
             return;
         }
         
         //限速，不再做任何处理，等到任务超时重新入队
         if(!sendAble(stockCode)){
             callback();
+            dequeue();
             return;
         }
 
@@ -168,9 +159,11 @@ var complete = function(error, body, weiboId, status, context){
     var record = context.record || {};
     var task = context.task;
     if(!error){
-        logger.info("success\t" + record.id + "\t" + weiboId + "\t" + record.article_id + "\t" + body.id + "\t" + body.t_url);
+        logger.info("success\t" + record.id + "\t" + record.stock_code + "\t" + weiboId + "\t" + body.id + "\t" + body.t_url);
         db.reposted(record, body.id, body.t_url, weiboId, context.user.id, function(err, info){
-            console.log([err, info]);    
+            if(err){
+                console.log([err, info]);    
+            }
         });
         return true;
     }
@@ -218,7 +211,7 @@ console.log('reposter start at ' + tool.getDateString() + ', pid is ' + process.
  * 测试代码
 
 setTimeout(function(){
-    var task = {uri:'mysql://abc.com/dddd#1', retry:0};
+    var task = {uri:'mysql://abc.com/dddd#2', retry:0};
     aq.push(task);
     console.log(aq.length());
 }, 1000);
