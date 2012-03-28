@@ -52,7 +52,7 @@ var repost = function(task, callback){
             console.log(['fetch repost relation error', err]);
             //要转发的微博不存在或者没有发送，并且超过3小时，放弃这个任务
             if(err.number == 7000){
-                if(tool.timestamp() - err.row.in_time > 10800){
+                if(tool.timestamp() - record.in_time > 10800){
                     complete(err, null, '', '', context);
                     taskBack(task, true);
                 }
