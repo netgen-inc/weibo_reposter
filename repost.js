@@ -95,7 +95,8 @@ var repost = function(task, callback){
             dequeue();
         }
         context.user = weiboAccounts[stockCode];
-        reposter.repost(weiboId, '', weiboAccounts[stockCode], context, cb);
+        var status = record.title || '';
+        reposter.repost(weiboId, status, weiboAccounts[stockCode], context, cb);
     });
 };
 
@@ -211,7 +212,7 @@ console.log('reposter start at ' + tool.getDateString() + ', pid is ' + process.
  * 测试代码
 
 setTimeout(function(){
-    var task = {uri:'mysql://abc.com/dddd#2', retry:0};
+    var task = {uri:'mysql://abc.com/dddd#1', retry:0};
     aq.push(task);
     console.log(aq.length());
 }, 1000);
