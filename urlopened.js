@@ -14,7 +14,7 @@ var run = function(ev){
     var microBlogId = ev.meta;
 
     getMicroBlog(microBlogId, function(err, result){
-        if(err || result.length == 0 || result[0].stock_code == 'a_stock'){
+        if(err || result.length > 0){
             return;
         }
         insertTask(microBlogId, 'a_stock', function(err, result){
@@ -33,7 +33,7 @@ var run = function(ev){
 de.on("open-url", run);
 
 var getMicroBlog = function(id, callback){
-    var sql = "SELECT * FROM micro_blog WHERE id = ?";
+    var sql = "SELECT * FROM article_subject WHERE micro_blog_id = ? AND stock_code = 'a_stock'";
     mcli.query(sql, [id], callback);
 }
 
@@ -42,3 +42,4 @@ var insertTask = function(microBlogId, stockCode, callback){
     mcli.query(sql, [microBlogId, stockCode, tool.timestamp()], callback);
 }
 console.log("urlopen listen start at " + tool.getDateString());
+//run({meta:'1150376'});
