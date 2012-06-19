@@ -14,9 +14,12 @@ var run = function(ev){
     var microBlogId = ev.meta;
 
     getMicroBlog(microBlogId, function(err, result){
-        if(err || result.length > 0){
+        if(err || result.length == 0 || result[0].stock_code == 'a_stock'
+             || result[0].in_time < (Date.now() / 1000) - 21600) {
+            console.log(microBlogId + " time out");
             return;
         }
+
         insertTask(microBlogId, 'a_stock', function(err, result){
             if(err){
                 if(err.number != 1062){
@@ -24,6 +27,7 @@ var run = function(ev){
                 }
             }else{
                 var task = "mysql://172.16.39.117:3306/weibo?repost_task#" + result.insertId;
+                console.log(task);
                 rq.enqueue(task);
             }
         });
@@ -33,7 +37,7 @@ var run = function(ev){
 de.on("open-url", run);
 
 var getMicroBlog = function(id, callback){
-    var sql = "SELECT * FROM article_subject WHERE micro_blog_id = ? AND stock_code = 'a_stock'";
+    var sql = "SELECT * FROM article_subject WHERE micro_blog_id = ? AND send_type = 'post'";
     mcli.query(sql, [id], callback);
 }
 
