@@ -95,7 +95,12 @@ var repost = function(task, callback){
             dequeue();
         }
         context.user = weiboAccounts[stockCode];
-        var status = record.title || '';
+        var status = '';
+        if(record.content){
+            status = record.content;
+        } else if (record.title){
+            status = record.title;    
+        }
         reposter.repost(weiboId, status, weiboAccounts[stockCode], context, cb);
     });
 };
