@@ -20,6 +20,13 @@ var run = function(ev){
             return;
         }
 
+        if(result[0].content_type 
+            && (result[0].content_type == 'bulllist' || result[0].content_type == 'bulletin')){
+
+            console.log(microBlogId + " is bulletin");
+            return;
+        }
+
         insertTask(microBlogId, 'a_stock', function(err, result){
             if(err){
                 if(err.number != 1062){
@@ -38,7 +45,20 @@ de.on("open-url", run);
 
 var getMicroBlog = function(id, callback){
     var sql = "SELECT * FROM article_subject WHERE micro_blog_id = ? AND send_type = 'post'";
-    mcli.query(sql, [id], callback);
+    mcli.query(sql, [id], function(err, subject){
+        if(err || subject.length == 0){
+            callback(err, subject);
+            return;
+        }
+
+        var sql = "SELECT * FROM micro_blog WHERE id = ?";
+        mcli.query(sql, [id], function(err1, blog){
+            if(!err1 && blog.length > 0){
+                subject[0].content_type = blog[0].content_type;
+            }
+            callback(err, subject);
+        });
+    });
 }
 
 var insertTask = function(microBlogId, stockCode, callback){
