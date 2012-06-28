@@ -15,7 +15,7 @@ var run = function(ev){
 
     getMicroBlog(microBlogId, function(err, result){
         if(err || result.length == 0 || result[0].stock_code == 'a_stock'
-             || result[0].in_time < (Date.now() / 1000) - 21600) {
+             || result[0].in_time < (Date.now() / 1000) - 10800) {
             console.log(microBlogId + " time out");
             return;
         }
@@ -24,6 +24,11 @@ var run = function(ev){
             && (result[0].content_type == 'bulllist' || result[0].content_type == 'bulletin')){
 
             console.log(microBlogId + " is bulletin");
+            return;
+        }
+
+        if(result[0].content && result[0].content.match(/【.*(公告|:|：|【).*】/)){
+            console.log(microBlogId + "'s title is invalid");
             return;
         }
 
@@ -55,6 +60,7 @@ var getMicroBlog = function(id, callback){
         mcli.query(sql, [id], function(err1, blog){
             if(!err1 && blog.length > 0){
                 subject[0].content_type = blog[0].content_type;
+                subject[0].content = blog[0].content;
             }
             callback(err, subject);
         });
