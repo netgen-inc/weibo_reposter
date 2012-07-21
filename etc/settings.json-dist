@@ -22,6 +22,10 @@
             "database":"spider"
          }
     },
+    "redis":{
+        "host":"localhost",
+        "port":6379
+    },
     "queue":{
         "repost":"weibo_repost",
         "interval":10000,

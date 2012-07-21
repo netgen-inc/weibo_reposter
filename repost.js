@@ -9,6 +9,9 @@ var event = require('events').EventEmitter;
 var tool = require('./lib/tool').tool;
 var async = require('async');
 
+var redis = require("redis");
+var redisCli = redis.createClient(settings.redis.port, settings.redis.host);
+
 
 //发送队列的API
 var rq = queue.getQueue('http://'+settings.queue.host+':'+settings.queue.port+'/queue', settings.queue.repost);
@@ -82,13 +85,6 @@ var repost = function(task, callback){
             return;
         }
         
-        //限速，不再做任何处理，等到任务超时重新入队
-        if(!sendAble(stockCode)){
-            callback();
-            dequeue();
-            return;
-        }
-
         var cb = function(error, body, id, status, context){
             taskBack(context.task, complete(error, body, id, status, context));
             callback();    
@@ -101,31 +97,34 @@ var repost = function(task, callback){
         } else if (record.title){
             status = record.title;    
         }
-        reposter.repost(weiboId, status, weiboAccounts[stockCode], context, cb);
+
+        //限速，不再做任何处理，等到任务超时重新入队
+        sendAble(stockCode, function(err, result){
+            console.log([err, result]);
+            if(!result){
+                callback();    
+                dequeue();
+            }else{
+                reposter.repost(weiboId, status, weiboAccounts[stockCode], context, cb);
+            }
+        });
+        
     });
 };
 
 
 //限速
-var sendAbleList = {};
-var sendAble = function(stockCode){
-    if(typeof sendAbleList[stockCode] != 'object'){
-        sendAbleList[stockCode] = {startTime:tool.timestamp(), cnt:0};
-    }
-    
-    var cur = sendAbleList[stockCode];
-    if(tool.timestamp() - cur.startTime <= settings.limit.interval){
-        if(cur.cnt < settings.limit.max){
-            cur.cnt += 1;
-            return true;     
+var sendAble = function(stockCode, callback){
+    var ts = tool.timestamp();
+    var key = "SEND_LIMIT_" + stockCode;
+    redisCli.get(key, function(err, lastSend){
+        if(!lastSend){
+            redisCli.setex(key, 180, ts);
+            callback(null, true);
         }else{
-            return false;   
+            callback(null, false);
         }
-    }else{
-        cur.cnt = 1;
-        cur.startTime = tool.timestamp();
-        return true;
-    }
+    });
 }
 
 var dequeue = function(){
@@ -215,13 +214,13 @@ console.log('reposter start at ' + tool.getDateString() + ', pid is ' + process.
 
 /**
  * 测试代码
-
+*/
 setTimeout(function(){
-    var task = {uri:'mysql://abc.com/dddd#1', retry:0};
+    var task = {uri:'mysql://abc.com/dddd#2', retry:0};
     aq.push(task);
     console.log(aq.length());
 }, 1000);
-*/
+
 
 
 
