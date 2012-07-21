@@ -66,6 +66,21 @@ var repost = function(task, callback){
             dequeue();
             return; 
         }
+
+        var status = '';
+        if(record.content){
+            status = record.content;
+        } else if (record.title){
+            status = record.title;    
+        }
+
+        if(status.match(/(公告|:|：|【|\[)/)){
+            logger.info("error\t" + record.id + "\t" + "\tthe title is invalid"); 
+            taskBack(task, true);
+            callback();
+            dequeue();
+            return;
+        }
         
         var stockCode = record.stock_code;
         //debug模式下，总是使用stock0@netgen.com.cn发送微博
@@ -73,6 +88,7 @@ var repost = function(task, callback){
             stockCode = 'sz900000';
         }
         stockCode = stockCode.toLowerCase();
+
         
         //微博账号错误
         if(!weiboAccounts[stockCode] || 
@@ -108,7 +124,6 @@ var repost = function(task, callback){
                 reposter.repost(weiboId, status, weiboAccounts[stockCode], context, cb);
             }
         });
-        
     });
 };
 
@@ -214,16 +229,10 @@ console.log('reposter start at ' + tool.getDateString() + ', pid is ' + process.
 
 /**
  * 测试代码
-*/
+
 setTimeout(function(){
     var task = {uri:'mysql://abc.com/dddd#2', retry:0};
     aq.push(task);
     console.log(aq.length());
 }, 1000);
-
-
-
-
-
-
- 
+*/
