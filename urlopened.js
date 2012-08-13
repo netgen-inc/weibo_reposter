@@ -32,7 +32,13 @@ var run = function(ev){
             return;
         }
 
-        insertTask(microBlogId, 'a_stock', function(err, result){
+        var title = '';
+        var m = result[0].content.match(/^【(.+?)】/);
+        if(m){
+            title = m[1];
+        }    
+        
+        insertTask(microBlogId, 'a_stock', title, function(err, result){
             if(err){
                 if(err.number != 1062){
                     console.log(err);
@@ -67,9 +73,9 @@ var getMicroBlog = function(id, callback){
     });
 }
 
-var insertTask = function(microBlogId, stockCode, callback){
-    var sql = "INSERT INTO repost_task(micro_blog_id, stock_code, in_time) VALUES(?, ?, ?)";
-    mcli.query(sql, [microBlogId, stockCode, tool.timestamp()], callback);
+var insertTask = function(microBlogId, stockCode, title, callback){
+    var sql = "INSERT INTO repost_task(micro_blog_id, stock_code, in_time, content) VALUES(?, ?, ?, ?)";
+    mcli.query(sql, [microBlogId, stockCode, tool.timestamp(), title], callback);
 }
 console.log("urlopen listen start at " + tool.getDateString());
-//run({meta:'1150376'});
+//run({meta:'1486788'});
