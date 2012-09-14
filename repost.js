@@ -47,7 +47,6 @@ var taskBack = function(task,  status){
     }
 }
 
-
 var repost = function(task, callback){
     db.getRepostTask(task.uri, function(err, weiboId, record){
         var context = {task:task,record:record};
@@ -82,8 +81,8 @@ var repost = function(task, callback){
             return;
         }
         
-        var stockCode = record.stock_code;
         //debug模式下，总是使用stock0@netgen.com.cn发送微博
+        var stockCode = record.stock_code;
         if(settings.mode == 'debug'){
             stockCode = 'sz900000';
         }
@@ -100,23 +99,16 @@ var repost = function(task, callback){
             dequeue();
             return;
         }
-        
+
         var cb = function(error, body, id, status, context){
             taskBack(context.task, complete(error, body, id, status, context));
             callback();    
             dequeue();
         }
         context.user = weiboAccounts[stockCode];
-        var status = '';
-        if(record.content){
-            status = record.content;
-        } else if (record.title){
-            status = record.title;    
-        }
 
         //限速，不再做任何处理，等到任务超时重新入队
         sendAble(stockCode, function(err, result){
-            console.log([err, result]);
             if(!result){
                 callback();    
                 dequeue();
@@ -130,14 +122,39 @@ var repost = function(task, callback){
 
 //限速
 var sendAble = function(stockCode, callback){
-    var ts = tool.timestamp();
-    var key = "SEND_LIMIT_" + stockCode;
-    redisCli.get(key, function(err, lastSend){
-        if(!lastSend){
-            redisCli.setex(key, 180, ts);
+    var funcs = [
+        function(callback){
+            if(stockCode != 'a_stock'){
+                callback(null, true);
+                return;
+            }
+            redisCli.get('a_stock_counter', function(err, count){
+                console.log([err, count]);
+                if(count > 0){
+                    callback(null, false);
+                }else{
+                    callback(null, true);
+                }
+            });
+        },
+        function(callback){
+            var ts = tool.timestamp();
+            var key = "SEND_LIMIT_" + stockCode;
+            redisCli.get(key, function(err, lastSend){
+                if(!lastSend){
+                    redisCli.setex(key, 180, ts);
+                    callback(null, true);
+                }else{
+                    callback(null, false);
+                }
+            });
+        }
+    ];
+    async.parallel(funcs, function(err, result){
+        if(err){
             callback(null, true);
         }else{
-            callback(null, false);
+            callback(null, (result[0] && result[1]));
         }
     });
 }
@@ -231,7 +248,7 @@ console.log('reposter start at ' + tool.getDateString() + ', pid is ' + process.
  * 测试代码
 
 setTimeout(function(){
-    var task = {uri:'mysql://abc.com/dddd#2', retry:0};
+    var task = {uri:'mysql://abc.com/dddd#10', retry:0};
     aq.push(task);
     console.log(aq.length());
 }, 1000);
