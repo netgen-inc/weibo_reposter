@@ -51,7 +51,7 @@ var repost = function(task, callback){
     db.getRepostTask(task.uri, function(err, weiboId, record){
         var context = {task:task,record:record};
         if(err){
-            console.log(['fetch repost relation error', err]);
+            console.log(['fetch repost relation error', record, err]);
             //要转发的微博不存在或者没有发送，并且超过3小时，放弃这个任务
             if(err.number == 7000){
                 if(tool.timestamp() - record.in_time > 10800){
@@ -122,41 +122,29 @@ var repost = function(task, callback){
 
 //限速
 var sendAble = function(stockCode, callback){
-    var funcs = [
-        function(callback){
-            if(stockCode != 'a_stock'){
-                callback(null, true);
-                return;
+    var limited = function(cb){
+        var ts = tool.timestamp();
+        var key = "SEND_LIMIT_" + stockCode;
+        redisCli.get(key, function(err, lastSend){
+            if(!lastSend){
+                redisCli.setex(key, 180, ts);
+                cb(null, true);
+            }else{
+                cb(null, false);
             }
-            redisCli.get('a_stock_counter', function(err, count){
-                console.log([err, count]);
-                if(count > 0){
-                    callback(null, false);
-                }else{
-                    callback(null, true);
-                }
-            });
-        },
-        function(callback){
-            var ts = tool.timestamp();
-            var key = "SEND_LIMIT_" + stockCode;
-            redisCli.get(key, function(err, lastSend){
-                if(!lastSend){
-                    redisCli.setex(key, 180, ts);
-                    callback(null, true);
-                }else{
-                    callback(null, false);
-                }
-            });
-        }
-    ];
-    async.parallel(funcs, function(err, result){
-        if(err){
-            callback(null, true);
-        }else{
-            callback(null, (result[0] && result[1]));
-        }
-    });
+        });
+    }   
+    if(stockCode == 'a_stock'){
+        redisCli.get('a_stock_counter', function(err, count){
+            if(count > 0){
+                callback(null, false);
+            }else{
+                limited(callback);    
+            }
+        });
+    }else{
+        limited(callback);
+    }
 }
 
 var dequeue = function(){
