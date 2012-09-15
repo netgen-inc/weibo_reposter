@@ -70,7 +70,7 @@ var clickCounter = function(microBlogId, callback){
     rcli.get(redisKey, function(err, count){
         if(!count || count == 0){
             rcli.setex(redisKey, 3600, 1);
-            callback({msg:'not clicked in 1 hour'});
+            callback({msg:microBlogId+':not clicked in 1 hour'});
         }else{
             callback(null, microBlogId);
         }
