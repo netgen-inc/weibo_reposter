@@ -4,6 +4,9 @@ var queue = require('queuer');
 var mysql = require("mysql");
 var tool = require('./lib/tool').tool;
 var mcli = mysql.createClient(settings.mysql.weibo);
+var redis = require('redis');
+var rcli = redis.createClient(settings.redis.port, settings.redis.host);
+var async = require("async");
 
 var rq = queue.getQueue('http://'+settings.queue.host+':'+settings.queue.port+'/queue', settings.queue.repost);
 
@@ -12,53 +15,73 @@ var run = function(ev){
         return;
     }
     var microBlogId = ev.meta;
-
-    getMicroBlog(microBlogId, function(err, result){
-        if(err || result.length == 0 || result[0].stock_code == 'a_stock'
-             || result[0].in_time < (Date.now() / 1000) - 10800) {
-            console.log(microBlogId + " time out");
-            return;
-        }
-
-        if(result[0].content_type 
-            && (result[0].content_type == 'bulllist' || result[0].content_type == 'bulletin')){
-
-            console.log(microBlogId + " is bulletin");
-            return;
-        }
-
-        if(result[0].content && result[0].content.match(/【.*(公告|:|：|【).*】/)){
-            console.log(microBlogId + "'s title is invalid");
-            return;
-        }
-
-        var title = '';
-        var m = result[0].content.match(/^【(.+?)】/);
-        if(m){
-            title = m[1];
-        }    
-        
-        insertTask(microBlogId, 'a_stock', title, function(err, result){
-            if(err){
-                if(err.number != 1062){
-                    console.log(err);
-                }
-            }else{
-                var task = "mysql://172.16.39.117:3306/weibo?repost_task#" + result.insertId;
-                console.log(task);
-                rq.enqueue(task);
-            }
-        });
+    var start = function(callback){
+        callback(null, microBlogId);
+    }
+    var funcs = [start, clickCounter, getMicroBlog, setRepostTask];    
+    async.waterfall(funcs, function(err, result){
+        console.log([err, result]);
     });
-    
 }
+
+var setRepostTask = function(result, callback){
+    var microBlogId = result[0].micro_blog_id;
+    if(result[0].stock_code == 'a_stock'
+         || result[0].in_time < (Date.now() / 1000) - 21600) {
+        callback({msg:microBlogId + ':timeout'});
+        return;
+    }
+    if(result[0].content_type 
+        && (result[0].content_type == 'bulllist' || result[0].content_type == 'bulletin')){
+        callback({msg:microBlogId + " is bulletin"});
+        return;
+    }
+
+    if(result[0].content && result[0].content.match(/【.*(公告|:|：|【).*】/)){
+        callback({msg:microBlogId + "'s title is invalid"});
+        return;
+    }
+
+    var title = '';
+    var m = result[0].content.match(/^【(.+?)】/);
+    if(m){
+        title = m[1];
+    }    
+    
+    insertTask(microBlogId, 'a_stock', title, function(err, result){
+        if(err){
+            if(err.number != 1062){
+                callback({msg:microBlogId + ':insert repost_task error'});
+            }else{
+                callback({msg:microBlogId + ':repeat repost'});
+            }
+        }else{
+            var task = "mysql://172.16.39.117:3306/weibo?repost_task#" + result.insertId;
+            rq.enqueue(task);
+            callback(null, task);
+        }
+    });
+}
+    
 de.on("open-url", run);
+
+var clickCounter = function(microBlogId, callback){
+    var redisKey = 'microblog_click_counter_' + microBlogId;
+    rcli.get(redisKey, function(err, count){
+        if(!count || count == 0){
+            rcli.setex(redisKey, 3600, 1);
+            callback({msg:'not clicked in 1 hour'});
+        }else{
+            callback(null, microBlogId);
+        }
+    })
+}
 
 var getMicroBlog = function(id, callback){
     var sql = "SELECT * FROM article_subject WHERE micro_blog_id = ? AND send_type = 'post'";
     mcli.query(sql, [id], function(err, subject){
         if(err || subject.length == 0){
-            callback(err, subject);
+            callback({msg : id + ':can not get the article_subject'}, subject);
             return;
         }
 
@@ -78,4 +101,4 @@ var insertTask = function(microBlogId, stockCode, title, callback){
     mcli.query(sql, [microBlogId, stockCode, tool.timestamp(), title], callback);
 }
 console.log("urlopen listen start at " + tool.getDateString());
-//run({meta:'1486788'});
+//run({meta:'111456'});
