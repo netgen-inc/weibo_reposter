@@ -66,6 +66,14 @@ var repost = function(task, callback){
             return; 
         }
 
+        if(tool.timestamp() - record.in_time > 21600){
+            complete({number:8000,message:'waiting more than 6 hour'}, null, '', '', context);
+            taskBack(task, true);
+            callback();
+            dequeue();
+            return;
+        }
+
         var status = '';
         if(record.content){
             status = record.content;
