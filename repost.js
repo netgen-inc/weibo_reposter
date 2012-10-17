@@ -15,7 +15,7 @@ var redisCli = redis.createClient(settings.redis.port, settings.redis.host);
 
 //发送队列的API
 var rq = queue.getQueue('http://'+settings.queue.host+':'+settings.queue.port+'/queue', settings.queue.repost);
-var Reposter = require('./lib/reposter').Reposter;
+var Reposter = require('./lib/reposter_v2').Reposter;
 var reposter = new Reposter();
 reposter.init(settings);
 
@@ -192,6 +192,7 @@ var complete = function(error, body, weiboId, status, context){
     var record = context.record || {};
     var task = context.task;
     if(!error){
+        body.t_url = '';
         logger.info("success\t" + record.id + "\t" + record.stock_code + "\t" + weiboId + "\t" + body.id + "\t" + body.t_url);
         db.reposted(record, body.id, body.t_url, weiboId, context.user.id, function(err, info){
             if(err){
@@ -200,15 +201,18 @@ var complete = function(error, body, weiboId, status, context){
         });
         return true;
     }
+    if(!error.error_code){
+        error.error_code = '70000';
+    }
     
     var errMsg = error.error || error.message;
     logger.info("error\t" + record.id +"\t"+ weiboId + "\t" + record.stock_code + "\t" + errMsg);  
     
     //发送受限制
-    if(errMsg.match(/^40(308|090)/)){
+    if(error.error_code >= 10021 && error.error_code <= 10024){
         return false;
     //40013太长, 40025重复
-    }else if(errMsg.match(/^400(13|25)/)){ 
+    }else if(error.error_code >= 20017 && error.error_code <= 20021){ 
         return true;
     }else{
         if(task.retry >= settings.queue.retry){
@@ -242,9 +246,8 @@ console.log('reposter start at ' + tool.getDateString() + ', pid is ' + process.
 
 /**
  * 测试代码
-
 setTimeout(function(){
-    var task = {uri:'mysql://abc.com/dddd#10', retry:0};
+    var task = {uri:'mysql://abc.com/dddd#93', retry:0};
     aq.push(task);
     console.log(aq.length());
 }, 1000);
