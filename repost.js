@@ -1,7 +1,7 @@
 var fs = require('fs');
 var settings = require(__dirname + '/etc/settings.json');
 var url = require('url');
-var de = require('devent').createDEvent('sender');
+//var de = require('devent').createDEvent('sender');
 var queue = require('queuer');
 var logger = require('./lib/logger').logger(settings.logFile);
 var util = require('util');
@@ -15,7 +15,7 @@ var redisCli = redis.createClient(settings.redis.port, settings.redis.host);
 
 //发送队列的API
 var rq = queue.getQueue('http://'+settings.queue.host+':'+settings.queue.port+'/queue', settings.queue.repost);
-var Reposter = require('./lib/reposter_v2').Reposter;
+var Reposter = require('./lib/reposter_v3').Reposter;
 var reposter = new Reposter();
 reposter.init(settings);
 
@@ -40,6 +40,7 @@ db.loadAccounts(function(err, accounts){
 });
 
 var taskBack = function(task,  status){
+    return;
     if(status){
         de.emit('task-finished', task);  
     }else{
@@ -130,6 +131,8 @@ var repost = function(task, callback){
 
 //限速
 var sendAble = function(stockCode, callback){
+    callback(null, true);
+    return;
     var limited = function(cb){
         var ts = tool.timestamp();
         var key = "SEND_LIMIT_" + stockCode;
@@ -156,6 +159,7 @@ var sendAble = function(stockCode, callback){
 }
 
 var dequeue = function(){
+    return;
     console.log('local queue length is ' + aq.length());
     if(aq.length() >= settings.reposterCount){
         return;
@@ -172,6 +176,7 @@ var dequeue = function(){
 }
 
 var start = function(){
+    return;
     setInterval(function(){
         dequeue();    
     }, settings.queue.interval);  
@@ -193,7 +198,7 @@ var complete = function(error, body, weiboId, status, context){
     var task = context.task;
     if(!error){
         body.t_url = '';
-        logger.info("success\t" + record.id + "\t" + record.stock_code + "\t" + weiboId + "\t" + body.id + "\t" + body.t_url);
+        logger.info("success\t" + record.id + "\t" + record.stock_code + "\t" + weiboId + "\t" + body.id);
         db.reposted(record, body.id, body.t_url, weiboId, context.user.id, function(err, info){
             if(err){
                 console.log([err, info]);    
@@ -209,10 +214,10 @@ var complete = function(error, body, weiboId, status, context){
     logger.info("error\t" + record.id +"\t"+ weiboId + "\t" + record.stock_code + "\t" + errMsg);  
     
     //发送受限制
-    if(error.error_code >= 10021 && error.error_code <= 10024){
+    if(error.nextAction == 'delay' && task.retry < settings.queue.retry){
         return false;
     //40013太长, 40025重复
-    }else if(error.error_code >= 20017 && error.error_code <= 20021){ 
+    }else if(error.nextAction == 'drop'){ 
         return true;
     }else{
         if(task.retry >= settings.queue.retry){
@@ -246,9 +251,10 @@ console.log('reposter start at ' + tool.getDateString() + ', pid is ' + process.
 
 /**
  * 测试代码
+ */
 setTimeout(function(){
-    var task = {uri:'mysql://abc.com/dddd#93', retry:0};
+    var task = {uri:'mysql://abc.com/dddd#142', retry:0};
     aq.push(task);
     console.log(aq.length());
 }, 1000);
-*/
+
