@@ -1,7 +1,7 @@
 var fs = require('fs');
 var settings = require(__dirname + '/etc/settings.json');
 var url = require('url');
-//var de = require('devent').createDEvent('sender');
+var de = require('devent').createDEvent('sender');
 var queue = require('queuer');
 var logger = require('./lib/logger').logger(settings.logFile);
 var util = require('util');
@@ -40,7 +40,6 @@ db.loadAccounts(function(err, accounts){
 });
 
 var taskBack = function(task,  status){
-    return;
     if(status){
         de.emit('task-finished', task);  
     }else{
@@ -60,7 +59,9 @@ var repost = function(task, callback){
                     taskBack(task, true);
                 }
             }else{
-                taskBack(task, complete(err, null, weiboId, '', context));
+                err.nextAction = 'drop';
+                complete(err, null, weiboId, '', context);
+                taskBack(task, true);
             }
             callback();
             dequeue();
@@ -131,8 +132,6 @@ var repost = function(task, callback){
 
 //限速
 var sendAble = function(stockCode, callback){
-    callback(null, true);
-    return;
     var limited = function(cb){
         var ts = tool.timestamp();
         var key = "SEND_LIMIT_" + stockCode;
@@ -159,8 +158,6 @@ var sendAble = function(stockCode, callback){
 }
 
 var dequeue = function(){
-    return;
-    console.log('local queue length is ' + aq.length());
     if(aq.length() >= settings.reposterCount){
         return;
     }
@@ -176,7 +173,6 @@ var dequeue = function(){
 }
 
 var start = function(){
-    return;
     setInterval(function(){
         dequeue();    
     }, settings.queue.interval);  
@@ -217,11 +213,8 @@ var complete = function(error, body, weiboId, status, context){
     if(error.nextAction == 'delay' && task.retry < settings.queue.retry){
         return false;
     //40013太长, 40025重复
-    }else if(error.nextAction == 'drop'){ 
-        return true;
     }else{
-        if(task.retry >= settings.queue.retry){
-            logger.info("error\t" + record.id +"\t"+ record.stock_code + "\t"+ "\tretry count more than "+settings.queue.retry);
+        if(error.nextAction == 'drop' || task.retry >= settings.queue.retry){
             return true;
         }else{
             return false;
@@ -251,10 +244,9 @@ console.log('reposter start at ' + tool.getDateString() + ', pid is ' + process.
 
 /**
  * 测试代码
- */
 setTimeout(function(){
     var task = {uri:'mysql://abc.com/dddd#142', retry:0};
     aq.push(task);
     console.log(aq.length());
 }, 1000);
-
+ */
