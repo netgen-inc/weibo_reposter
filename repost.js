@@ -48,21 +48,14 @@ var taskBack = function(task,  status){
 }
 
 var repost = function(task, callback){
-    db.getRepostTask(task.uri, function(err, weiboId, record){
+    db.getRepostTask(task.uri, function(err, record, sent){
         var context = {task:task,record:record};
         if(err){
-            console.log(['fetch repost relation error', record, err]);
+            console.log(['fetch repost task error', record, err]);
             //要转发的微博不存在或者没有发送，并且超过3小时，放弃这个任务
-            if(err.number == 7000){
-                if(tool.timestamp() - record.in_time > 10800){
-                    complete(err, null, '', '', context);
-                    taskBack(task, true);
-                }
-            }else{
-                err.nextAction = 'drop';
-                complete(err, null, weiboId, '', context);
-                taskBack(task, true);
-            }
+            err.nextAction = 'drop';
+            complete(err, null, weiboId, '', context);
+            taskBack(task, true);
             callback();
             dequeue();
             return; 
@@ -92,18 +85,16 @@ var repost = function(task, callback){
         }
         
         //debug模式下，总是使用stock0@netgen.com.cn发送微博
-        var stockCode = record.stock_code;
         if(settings.mode == 'debug'){
-            stockCode = 'sz900000';
+            record.stock_code= 'sz900000';
         }
-        stockCode = stockCode.toLowerCase();
+        record.stock_code = record.stock_code.toLowerCase();
 
         
         //微博账号错误
-        if(!weiboAccounts[stockCode] || 
-            !weiboAccounts[stockCode].access_token || 
-            !weiboAccounts[stockCode].access_token_secret){
-            logger.info("error\t" + record.id + "\t" + stockCode + "\tNOT Found the account\t"); 
+        var account = getAccount(record.stock_code, sent);
+        if(!account || !account.weibo_center_id){
+            logger.info("error\t" + record.id + "\t" + record.stock_code+ "\tNOT Found the account\t"); 
             taskBack(task, true);
             callback();
             dequeue();
@@ -115,46 +106,83 @@ var repost = function(task, callback){
             callback();    
             dequeue();
         }
-        context.user = weiboAccounts[stockCode];
+        context.user = account;
 
         //限速，不再做任何处理，等到任务超时重新入队
-        sendAble(stockCode, function(err, result){
-            if(!result){
+        sendAble(record.stock_code, sent.weibo_id, account.id, function(err, result){
+            if(err){
+                if (err.msg == 'reposted') {
+                    logger.info("error\trepeat\t" + sent.weibo_id+ "\t" + account.id);
+                    taskBack(task, true);
+                }
                 callback();    
                 dequeue();
             }else{
-                reposter.repost(weiboId, status, weiboAccounts[stockCode], context, cb);
+                reposter.repost(sent.weibo_id, status, account, context, cb);
             }
         });
     });
 };
 
+var getAccount = function (stockCode, sent) {
+    if(settings.mode == 'debug') {
+        stockCode = 'sz900000';
+    }
+    var sentAccount = weiboAccounts.ids[sent.account_id];
+    if(!sentAccount) {
+        return null;
+    } 
+
+    if(weiboAccounts.stocks[stockCode]) {
+        return weiboAccounts.stocks[stockCode][sentAccount.provider];
+    }
+    return null;
+}
+
 
 //限速
-var sendAble = function(stockCode, callback){
-    var limited = function(cb){
-        var ts = tool.timestamp();
-        var key = "SEND_LIMIT_" + stockCode;
-        redisCli.get(key, function(err, lastSend){
-            if(!lastSend){
-                redisCli.setex(key, 180, ts);
-                cb(null, true);
-            }else{
-                cb(null, false);
+var lockedAccounts = {};
+var sendAble = function(stockCode, weiboId, accountId, callback){
+    lockedAccounts[accountId] = accountId;
+    var reposted = function (cb) {
+        db.getRepostRecord(accountId, weiboId, function (err, result) {
+            if(err || result.length != 0) {
+                cb({msg:'reposted'});
+            }else {
+                cb();
             }
         });
-    }   
-    if(stockCode == 'a_stock'){
-        redisCli.get('a_stock_counter', function(err, count){
-            if(count > 0){
-                callback(null, false);
-            }else{
-                limited(callback);    
-            }
-        });
-    }else{
-        limited(callback);
-    }
+    };
+
+    var accountAble = function (cb) {
+        var limited = function(lcb){
+            var ts = tool.timestamp();
+            var key = "SEND_LIMIT_" + accountId;
+            redisCli.get(key, function(err, lastSend){
+                if(!lastSend){
+                    redisCli.setex(key, 180, ts);
+                    lcb(null, true);
+                }else{
+                    lcb({msg:'limit'}, false);
+                }
+            });
+        }   
+        if(stockCode == 'a_stock'){
+            redisCli.get('a_stock_counter', function(err, count){
+                if(count > 0){
+                    cb({msg:'limit_astock'}, false);
+                }else{
+                    limited(cb);    
+                }
+            });
+        }else{
+            limited(cb);
+        }
+    };
+    async.series ([reposted, accountAble], function (err, result) {
+        delete lockedAccounts[accountId];
+        callback(err);
+    });
 }
 
 var dequeue = function(){
@@ -194,7 +222,7 @@ var complete = function(error, body, weiboId, status, context){
     var task = context.task;
     if(!error){
         body.t_url = '';
-        logger.info("success\t" + record.id + "\t" + record.stock_code + "\t" + weiboId + "\t" + body.id);
+        logger.info("success\t" + record.id + "\t" + record.stock_code + "\t" +context.user.id+ "\t" + weiboId + "\t" + body.id);
         db.reposted(record, body.id, body.t_url, weiboId, context.user.id, function(err, info){
             if(err){
                 console.log([err, info]);    
