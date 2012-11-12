@@ -3,12 +3,19 @@ var de = require('devent').createDEvent('sender');
 var queue = require('queuer');
 var mysql = require("mysql");
 var tool = require('./lib/tool').tool;
+var db = require('./lib/db').db;
 var mcli = mysql.createClient(settings.mysql.weibo);
 var redis = require('redis');
 var rcli = redis.createClient(settings.redis.port, settings.redis.host);
 var async = require("async");
+db.init(settings);
 
 var rq = queue.getQueue('http://'+settings.queue.host+':'+settings.queue.port+'/queue', settings.queue.repost);
+
+var weiboAccounts;
+db.loadAccounts (function (err, accounts) {
+    weiboAccounts = accounts;
+});
 
 var run = function(ev){
     if(!ev || !ev.meta || !ev.meta.match(/^\d+$/)){
@@ -18,37 +25,50 @@ var run = function(ev){
     var start = function(callback){
         callback(null, microBlogId);
     }
-    var funcs = [start, clickCounter, getMicroBlog, setRepostTask];    
+    var funcs = [start, clickCounter, getMicroBlog, getSentRecord, setRepostTask];    
     async.waterfall(funcs, function(err, result){
         console.log([err, result]);
     });
 }
 
+var getSentRecord = function (blog, callback) {
+    var sql = "SELECT * FROM sent_micro_blog WHERE micro_blog_id = ?";
+    sql = mcli.format(sql, [blog.micro_blog_id]);
+    mcli.query(sql, function (err, result) {
+        if (err || result.length == 0) {
+            callback({msg:'not found the sent record'});
+        } else {
+            blog.sentRecord = result;
+            callback(null, blog);
+        }
+    });
+}
+
 var setRepostTask = function(result, callback){
-    var microBlogId = result[0].micro_blog_id;
-    if(result[0].stock_code == 'a_stock'
-         || result[0].in_time < (Date.now() / 1000) - 21600) {
+    var microBlogId = result.micro_blog_id;
+    if(result.stock_code == 'a_stock'
+         || result.in_time < (Date.now() / 1000) - 21600) {
         callback({msg:microBlogId + ':timeout'});
         return;
     }
-    if(result[0].content_type 
-        && (result[0].content_type == 'bulllist' || result[0].content_type == 'bulletin')){
+    if(result.content_type 
+        && (result.content_type == 'bulllist' || result.content_type == 'bulletin')){
         callback({msg:microBlogId + " is bulletin"});
         return;
     }
 
-    if(result[0].content && result[0].content.match(/【.*(公告|:|：|【).*】/)){
+    if(result.content && result.content.match(/【.*(公告|:|：|【).*】/)){
         callback({msg:microBlogId + "'s title is invalid"});
         return;
     }
 
     var title = '';
-    var m = result[0].content.match(/^【(.+?)】/);
+    var m = result.content.match(/^【(.+?)】/);
     if(m){
         title = m[1];
     }    
     
-    insertTask(microBlogId, 'a_stock', title, function(err, result){
+    insertTask(microBlogId, 'a_stock', title, function(err, info){
         if(err){
             if(err.number != 1062){
                 callback({msg:microBlogId + ':insert repost_task error'});
@@ -56,9 +76,19 @@ var setRepostTask = function(result, callback){
                 callback({msg:microBlogId + ':repeat repost'});
             }
         }else{
-            var task = "mysql://172.16.39.117:3306/weibo?repost_task#" + result.insertId;
-            rq.enqueue(task);
-            callback(null, task);
+            //循环发送列表，找到发送被点击的微博的账号
+            //再找到A股雷达和发送账号同一平台的账号
+            async.forEach(result.sentRecord, function (sent, cb) {
+                var account, sentAccount = weiboAccounts.ids[sent.account_id];
+                if(!sentAccount || !(account = weiboAccounts.stocks.a_stock[sentAccount.provider])) {
+                    cb();
+                    return;
+                }
+                var task = "mysql://172.16.39.117:3306/weibo?repost_task#" + info.insertId + "_" + account.id;
+                rq.enqueue(task);
+            }, function () {
+                callback(null, task);
+            });
         }
     });
 }
@@ -91,7 +121,7 @@ var getMicroBlog = function(id, callback){
                 subject[0].content_type = blog[0].content_type;
                 subject[0].content = blog[0].content;
             }
-            callback(err, subject);
+            callback(err, subject[0]);
         });
     });
 }
@@ -101,4 +131,4 @@ var insertTask = function(microBlogId, stockCode, title, callback){
     mcli.query(sql, [microBlogId, stockCode, tool.timestamp(), title], callback);
 }
 console.log("urlopen listen start at " + tool.getDateString());
-//run({meta:'111456'});
+//run({meta:'145515'});
