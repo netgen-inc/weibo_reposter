@@ -54,7 +54,7 @@ var repost = function(task, callback){
             console.log(['fetch repost task error', record, err]);
             //要转发的微博不存在或者没有发送，并且超过3小时，放弃这个任务
             err.nextAction = 'drop';
-            complete(err, null, weiboId, '', context);
+            complete(err, null, '', '', context);
             taskBack(task, true);
             callback();
             dequeue();

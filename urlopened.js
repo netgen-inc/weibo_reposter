@@ -84,7 +84,7 @@ var setRepostTask = function(result, callback){
                     cb();
                     return;
                 }
-                var task = "mysql://172.16.39.117:3306/weibo?repost_task#" + info.insertId + "_" + account.id;
+                var task = "mysql://172.16.39.117:3306/weibo?repost_task#" + info.insertId + "_" + sent.id;
                 rq.enqueue(task);
             }, function () {
                 callback(null, task);
