@@ -168,8 +168,8 @@ var sendAble = function(stockCode, weiboId, accountId, callback){
             });
         }   
         if(stockCode == 'a_stock'){
-            redisCli.get('a_stock_counter', function(err, count){
-                if(count > 0){
+            redisCli.get('a_stock_send_' + accountId, function(err, count){
+                if(count){
                     cb({msg:'limit_astock'}, false);
                 }else{
                     limited(cb);    
